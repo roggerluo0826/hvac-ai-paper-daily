@@ -1,49 +1,70 @@
 // Vercel Serverless Function — 從 arXiv 抓取「數位孿生 × 空調 × AI」高價值論文並評分
 // 零依賴：使用 Node 內建 fetch（Node 18+）與輕量 XML 解析。
 
-// 主題搜尋字串（對應 NotebookLM 歸納的核心研究方向）
+// 主題搜尋字串：每一條都綁定建築 / HVAC / 冷凍空調 / 數位孿生 領域錨點，
+// 避免抓到純機器人、純物理、智慧電網等不相干論文。
 const QUERIES = [
-  'all:"digital twin" AND (all:HVAC OR all:"building energy")',
-  'all:"physics-informed neural network" AND (all:building OR all:HVAC OR all:energy)',
-  'all:"reinforcement learning" AND all:HVAC',
+  'all:"digital twin" AND (all:HVAC OR all:"building energy" OR all:building)',
+  'all:"physics-informed" AND (all:building OR all:HVAC OR all:"thermal comfort")',
+  'all:"reinforcement learning" AND (all:HVAC OR all:building OR all:"thermal comfort" OR all:chiller)',
   'all:"deep reinforcement learning" AND (all:building OR all:HVAC)',
-  'all:"building energy" AND (all:surrogate OR all:"digital twin")',
-  'all:"model predictive control" AND (all:HVAC OR all:building)',
-  'all:"thermal comfort" AND (all:"reinforcement learning" OR all:"deep learning")',
-  'all:"digital twin" AND all:building AND (all:Modelica OR all:EnergyPlus OR all:simulation)',
-  'all:"indoor environmental quality" AND all:prediction',
-  'all:"physics-informed" AND all:"reinforcement learning"',
+  'all:"building energy" AND (all:surrogate OR all:"digital twin" OR all:control OR all:optimization)',
+  'all:"model predictive control" AND (all:HVAC OR all:building OR all:"thermal comfort")',
+  'all:"thermal comfort" AND (all:"reinforcement learning" OR all:"deep learning" OR all:control)',
+  'all:"digital twin" AND all:building AND (all:Modelica OR all:EnergyPlus OR all:energy)',
+  'all:(HVAC OR chiller OR refrigeration OR "heat pump") AND (all:"deep learning" OR all:"machine learning" OR all:control)',
+  'all:"indoor environmental quality" AND (all:prediction OR all:control)',
 ];
 
-// 高價值關鍵字權重（NotebookLM 歸納的「有料」特徵）
+// 領域錨點（必要）：論文必須命中至少一個，否則直接淘汰 —— 確保只看建築/空調/冷凍/數位孿生
 // 命中於 title 權重 ×2、abstract ×1
-const KEYWORD_WEIGHTS = {
+const DOMAIN_WEIGHTS = {
+  'hvac': 5,
+  'building energy': 5,
+  'air conditioning': 4,
+  'air-conditioning': 4,
+  'refrigeration': 4,
+  'heat pump': 4,
+  'chiller': 4,
+  'thermal comfort': 4,
+  'digital twin': 4,
+  'energyplus': 4,
+  'indoor environmental quality': 4,
+  'smart building': 4,
+  'refrigerant': 3,
+  'indoor air': 3,
+  'building': 3,
+  'buildings': 3,
+  'modelica': 3,
+  'built environment': 3,
+  'ventilation': 3,
+  'district heating': 3,
+  'data center cooling': 3,
+  'room temperature': 2,
+  'occupancy': 2,
+};
+
+// AI / 自動控制方法（加值）：只有在領域命中後才計分，且至少要中一個才顯示
+const METHOD_WEIGHTS = {
   'physics-informed': 6,
   'physics informed': 6,
   'pinn': 6,
-  'digital twin': 5,
   'sim-to-real': 5,
   'sim2real': 5,
   'deep reinforcement learning': 5,
   'reinforcement learning': 4,
+  'model predictive control': 4,
   'surrogate': 4,
-  'pareto': 3,
   'multi-objective': 3,
-  'model predictive control': 3,
-  'thermal comfort': 3,
-  'indoor environmental quality': 3,
-  'energy management': 3,
-  'building energy': 3,
-  'hvac': 3,
-  'chiller': 3,
-  'modelica': 3,
-  'energyplus': 3,
+  'pareto': 3,
+  'autonomous control': 3,
   'fmu': 3,
-  'data center': 2,
   'real-time': 2,
   'edge': 2,
-  'occupancy': 1,
   'pmv': 2,
+  'optimization': 1,
+  'deep learning': 1,
+  'machine learning': 1,
 };
 
 const ARXIV_ENDPOINT = 'https://export.arxiv.org/api/query';
@@ -108,23 +129,32 @@ function parseFeed(xml) {
 function scorePaper(p) {
   const title = (p.title || '').toLowerCase();
   const abs = (p.summary || '').toLowerCase();
-  let score = 0;
-  const hits = [];
-  for (const [kw, w] of Object.entries(KEYWORD_WEIGHTS)) {
+  p.matched = [];
+
+  // 命中計分：標題 ×2、摘要 ×1，並記錄命中關鍵字
+  const hit = (kw, w) => {
     const inTitle = title.includes(kw);
     const inAbs = abs.includes(kw);
-    if (inTitle || inAbs) {
-      score += (inTitle ? w * 2 : 0) + (inAbs ? w : 0);
-      hits.push(kw);
-    }
-  }
+    if (!inTitle && !inAbs) return 0;
+    p.matched.push(kw);
+    return (inTitle ? w * 2 : 0) + (inAbs ? w : 0);
+  };
+
+  // 第 1 層：領域錨點
+  let domainScore = 0;
+  for (const [kw, w] of Object.entries(DOMAIN_WEIGHTS)) domainScore += hit(kw, w);
+
+  // 第 2 層：AI / 自動控制方法
+  let methodScore = 0;
+  for (const [kw, w] of Object.entries(METHOD_WEIGHTS)) methodScore += hit(kw, w);
+
   // 近期加權：越新分數越高（30 天內遞減加成）
   const days = daysOld(p.published);
   const recency = Math.max(0, 30 - days) * 0.3;
-  score += recency;
 
-  p.matched = hits;
-  p.rawScore = Math.round(score * 10) / 10;
+  p.domainScore = domainScore;
+  p.methodScore = methodScore;
+  p.rawScore = Math.round((domainScore + methodScore + recency) * 10) / 10;
   return p;
 }
 
@@ -167,8 +197,11 @@ export default async function handler(req, res) {
       p.daysOld = Math.round(daysOld(p.published));
     });
 
-    // 過濾掉幾乎無關的（分數過低）
-    papers = papers.filter((p) => p.rawScore >= 3);
+    // 領域門檻：必須是建築/空調/冷凍/數位孿生領域（domainScore>0）
+    // 且至少命中一個 AI / 自動控制方法（methodScore>0），再濾掉太弱的
+    papers = papers.filter(
+      (p) => p.domainScore > 0 && p.methodScore > 0 && p.rawScore >= 5
+    );
     // 預設依有料分數排序
     papers.sort((a, b) => b.score - a.score || Date.parse(b.published) - Date.parse(a.published));
 
