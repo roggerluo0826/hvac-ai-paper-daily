@@ -14,6 +14,11 @@ const QUERIES = [
   'all:"digital twin" AND all:building AND (all:Modelica OR all:EnergyPlus OR all:energy)',
   'all:(HVAC OR chiller OR refrigeration OR "heat pump") AND (all:"deep learning" OR all:"machine learning" OR all:control)',
   'all:"indoor environmental quality" AND (all:prediction OR all:control)',
+  // 補充主題（權重較低）：資料中心散熱 / 節電節能 / 需量反應
+  'all:"data center" AND (all:cooling OR all:thermal OR all:HVAC OR all:energy)',
+  'all:"data center" AND (all:"reinforcement learning" OR all:"machine learning" OR all:"deep learning")',
+  'all:("demand response" OR "peak shaving" OR "load shifting") AND (all:building OR all:HVAC OR all:"data center")',
+  'all:("energy efficiency" OR "energy saving") AND (all:building OR all:HVAC OR all:chiller OR all:"data center")',
 ];
 
 // 領域錨點（必要）：論文必須命中至少一個，否則直接淘汰 —— 確保只看建築/空調/冷凍/數位孿生
@@ -40,9 +45,20 @@ const DOMAIN_WEIGHTS = {
   'built environment': 3,
   'ventilation': 3,
   'district heating': 3,
-  'data center cooling': 3,
   'room temperature': 2,
   'occupancy': 2,
+  // 補充領域（權重較低）：資料中心散熱 / 節電節能 / 需量反應
+  'data center': 3,
+  'datacenter': 3,
+  'data centre': 3,
+  'server room': 3,
+  'demand response': 3,
+  'demand-side': 2,
+  'peak shaving': 2,
+  'load shifting': 2,
+  'energy efficiency': 2,
+  'energy saving': 2,
+  'energy conservation': 2,
 };
 
 // AI / 自動控制方法（加值）：只有在領域命中後才計分，且至少要中一個才顯示
