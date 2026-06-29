@@ -1,0 +1,14 @@
+{
+  "name": "hvac-ai-paper-daily",
+  "version": "1.0.0",
+  "private": true,
+  "description": "每日自動彙整數位孿生 × 空調 HVAC × AI 能源優化的最新 arXiv 高價值論文",
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "test:api": "node scripts/test-api.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

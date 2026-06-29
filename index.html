@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>每日論文 · 數位孿生 × 空調 AI</title>
+  <meta name="description" content="每日自動彙整數位孿生、HVAC 空調與 AI 能源優化的最新高價值論文" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📄</text></svg>" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <div class="brand">
+        <h1>📄 每日論文</h1>
+        <p class="subtitle">數位孿生 × 空調 HVAC × AI 能源優化 — 每日自動彙整 arXiv 最新高價值研究</p>
+      </div>
+      <div class="meta" id="meta"></div>
+    </div>
+  </header>
+
+  <nav class="toolbar">
+    <div class="wrap toolbar-inner">
+      <div class="filters">
+        <label>排序
+          <select id="sort">
+            <option value="score">有料分數</option>
+            <option value="date">最新發表</option>
+          </select>
+        </label>
+        <label>時間範圍
+          <select id="range">
+            <option value="7">近 7 天</option>
+            <option value="30" selected>近 30 天</option>
+            <option value="90">近 90 天</option>
+            <option value="9999">全部</option>
+          </select>
+        </label>
+        <input type="search" id="search" placeholder="關鍵字過濾（標題/摘要）…" />
+      </div>
+      <button id="refresh" class="btn">↻ 重新整理</button>
+    </div>
+  </nav>
+
+  <main class="wrap">
+    <div id="status" class="status"></div>
+    <div id="list" class="list"></div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      資料來源：<a href="https://arxiv.org" target="_blank" rel="noopener">arXiv.org</a>
+      ｜分類：cs.LG · cs.AI · eess.SY · cs.CE · math.OC
+      ｜每 6 小時自動更新
+    </div>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
