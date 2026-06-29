@@ -27,13 +27,14 @@ const DOMAIN_WEIGHTS = {
   'heat pump': 4,
   'chiller': 4,
   'thermal comfort': 4,
-  'digital twin': 4,
   'energyplus': 4,
   'indoor environmental quality': 4,
   'smart building': 4,
+  'building automation': 4,
+  'building heating': 4,
+  'building cooling': 4,
   'refrigerant': 3,
   'indoor air': 3,
-  'building': 3,
   'buildings': 3,
   'modelica': 3,
   'built environment': 3,
@@ -49,6 +50,7 @@ const METHOD_WEIGHTS = {
   'physics-informed': 6,
   'physics informed': 6,
   'pinn': 6,
+  'digital twin': 4,
   'sim-to-real': 5,
   'sim2real': 5,
   'deep reinforcement learning': 5,
@@ -66,6 +68,16 @@ const METHOD_WEIGHTS = {
   'deep learning': 1,
   'machine learning': 1,
 };
+
+// 排除清單：命中任一者直接淘汰 —— 機器人 / 載具 / 航太 / 通訊網路等非建築空調主題
+// （即使它們借用了 HVAC、heat pump、digital twin、control 等字眼）
+const EXCLUDE_KEYWORDS = [
+  'robot', 'quadruped', 'legged', 'locomotion', 'humanoid', 'manipulator', 'manipulation',
+  'drone', ' uav', 'blimp', 'spacecraft', 'satellite', 'aircraft', 'flight control',
+  'autonomous driving', 'self-driving', 'autonomous vehicle', 'electric vehicle',
+  'electric-vehicle', 'vehicle routing', 'internet of vehicles', 'fleet',
+  '5g', '6g', 'cellular network', 'wireless network',
+];
 
 const ARXIV_ENDPOINT = 'https://export.arxiv.org/api/query';
 const MAX_PER_QUERY = 30;
@@ -130,6 +142,10 @@ function scorePaper(p) {
   const title = (p.title || '').toLowerCase();
   const abs = (p.summary || '').toLowerCase();
   p.matched = [];
+
+  // 排除清單：命中非建築空調主題 → 標記淘汰
+  const blob = title + ' ' + abs;
+  p.excluded = EXCLUDE_KEYWORDS.find((kw) => blob.includes(kw)) || null;
 
   // 命中計分：標題 ×2、摘要 ×1，並記錄命中關鍵字
   const hit = (kw, w) => {
@@ -200,7 +216,7 @@ export default async function handler(req, res) {
     // 領域門檻：必須是建築/空調/冷凍/數位孿生領域（domainScore>0）
     // 且至少命中一個 AI / 自動控制方法（methodScore>0），再濾掉太弱的
     papers = papers.filter(
-      (p) => p.domainScore > 0 && p.methodScore > 0 && p.rawScore >= 5
+      (p) => !p.excluded && p.domainScore > 0 && p.methodScore > 0 && p.rawScore >= 5
     );
     // 預設依有料分數排序
     papers.sort((a, b) => b.score - a.score || Date.parse(b.published) - Date.parse(a.published));
