@@ -28,7 +28,9 @@ npm run dev         # vercel dev，本機完整預覽 http://localhost:3000
 
 編輯 `api/papers.js`：
 - `QUERIES` — arXiv 搜尋字串
-- `KEYWORD_WEIGHTS` — 「有料」關鍵字權重
+- `DOMAIN_WEIGHTS` — 領域錨點（建築/HVAC/冷凍/數位孿生），論文必須命中至少一個才顯示
+- `METHOD_WEIGHTS` — AI／自動控制方法加值（PINN、強化學習、MPC…），須至少命中一個
+- `EXCLUDE_KEYWORDS` — 排除清單（機器人、電動車、無人機、5G…命中即淘汰）
 
 ## arXiv 分類
 
