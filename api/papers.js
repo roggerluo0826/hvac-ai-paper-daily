@@ -98,6 +98,12 @@ const EXCLUDE_KEYWORDS = [
 const ARXIV_ENDPOINT = 'https://export.arxiv.org/api/query';
 const MAX_PER_QUERY = 30;
 
+// 韌性參數：arXiv API 有時單條查詢就要 20s+，且對併發會限流。
+// 因此限制併發、每條查詢單獨逾時、並設整體截止時間，保證在 Vercel maxDuration 前回傳。
+const PER_FETCH_TIMEOUT_MS = 12000; // 單條查詢最多等 12 秒，逾時當作空結果
+const CONCURRENCY = 5;              // 同時最多 5 條，避免被 arXiv 限流
+const OVERALL_DEADLINE_MS = 45000;  // 整支函式最多跑 45 秒（maxDuration 60，留裕度）
+
 function decodeEntities(s) {
   return s
     .replace(/&lt;/g, '<')
@@ -201,23 +207,56 @@ async function fetchQuery(q) {
   const url =
     `${ARXIV_ENDPOINT}?search_query=${encodeURIComponent(q)}` +
     `&sortBy=submittedDate&sortOrder=descending&start=0&max_results=${MAX_PER_QUERY}`;
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'hvac-ai-paper-daily/1.0 (research reading list)' },
-  });
-  if (!res.ok) throw new Error(`arXiv ${res.status}`);
-  const xml = await res.text();
-  return parseFeed(xml);
+  // 單條查詢逾時保護：超過 PER_FETCH_TIMEOUT_MS 就中止，避免拖垮整支函式
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), PER_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'hvac-ai-paper-daily/1.0 (research reading list)' },
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new Error(`arXiv ${res.status}`);
+    const xml = await res.text();
+    return parseFeed(xml);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// 有限併發執行：一次最多 CONCURRENCY 條，任一條失敗/逾時不影響其他條。
+// 整體有 deadline 保護：到時就用「目前已成功的結果」回傳，不再等待。
+async function fetchAllQueries() {
+  const collected = [];
+  let index = 0;
+  const deadline = Date.now() + OVERALL_DEADLINE_MS;
+
+  async function worker() {
+    while (index < QUERIES.length && Date.now() < deadline) {
+      const q = QUERIES[index++];
+      try {
+        const entries = await fetchQuery(q);
+        collected.push(...entries);
+      } catch (_) {
+        // 單條失敗（逾時/限流/網路）忽略，繼續下一條
+      }
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(CONCURRENCY, QUERIES.length) }, worker);
+  // 整體 deadline 兜底：即使某些 worker 仍卡著，也不會超過 OVERALL_DEADLINE_MS
+  await Promise.race([
+    Promise.all(workers),
+    new Promise((resolve) => setTimeout(resolve, OVERALL_DEADLINE_MS)),
+  ]);
+  return collected;
 }
 
 export default async function handler(req, res) {
   try {
-    const results = await Promise.allSettled(QUERIES.map(fetchQuery));
+    const all = await fetchAllQueries();
     const byId = new Map();
-    for (const r of results) {
-      if (r.status !== 'fulfilled') continue;
-      for (const p of r.value) {
-        if (!byId.has(p.id)) byId.set(p.id, p);
-      }
+    for (const p of all) {
+      if (!byId.has(p.id)) byId.set(p.id, p);
     }
 
     let papers = [...byId.values()].map(scorePaper);
@@ -237,8 +276,13 @@ export default async function handler(req, res) {
     // 預設依有料分數排序
     papers.sort((a, b) => b.score - a.score || Date.parse(b.published) - Date.parse(a.published));
 
-    // Edge 快取 6 小時，背景更新
-    res.setHeader('Cache-Control', 'public, s-maxage=21600, stale-while-revalidate=86400');
+    // 只有抓到論文才長快取 6 小時（背景更新）；若這次一篇都沒抓到（arXiv 全逾時），
+    // 只短快取 60 秒，讓下次請求盡快重試，而不是把空白結果卡住 6 小時。
+    if (papers.length > 0) {
+      res.setHeader('Cache-Control', 'public, s-maxage=21600, stale-while-revalidate=86400');
+    } else {
+      res.setHeader('Cache-Control', 'public, s-maxage=60');
+    }
     res.status(200).json({
       generatedAt: new Date().toISOString(),
       count: papers.length,
