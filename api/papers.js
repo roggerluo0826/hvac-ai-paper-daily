@@ -160,7 +160,31 @@ function parseFeed(xml) {
   return entries;
 }
 
+// ── 讀者對位（第三軸）──────────────────────────────────────────
+// 有料分數只說「切不切題」，不說「寫給誰」。這裡從摘要挑出三件事給 ESCO 顧問看：
+//   ① 動機句：作者自己說這篇想幫誰（"in the hope that…"）
+//   ② 預期讀者：偏 ML 研究者 or 偏工程實務
+//   ③ 負面情報：它證明了什麼行不通 / 差距很小 / 規則法反而贏
+// ponytail: 關鍵字啟發式，只看摘要；誤判時改下面三組字詞即可
+const MOTIVE_RE = /in the hope|we hope|will benefit|(?:useful|valuable|guidance) for|for (?:practitioners|engineers|researchers|operators)|to (?:help|guide|inform) /i;
+const ML_RE = /\b(?:applied rl|rl (?:work|research|community|algorithm)|novel (?:architecture|network|algorithm)|state-of-the-art|benchmark|neural network architecture|transformer|graph neural|offline rl|policy gradient|actor-critic)/i;
+const PRACTICE_RE = /\b(?:practitioners?|engineers?|facility managers?|operators?|retrofit|commissioning|measurement and verification|m&v|field (?:test|trial|deployment|data)|deployed in|real[- ]world (?:building|deployment|operation)|case study|existing buildings?|rule-based)/i;
+const NEGATIVE_RE = /no off-the-shelf|not (?:plug-and-play|straightforward)|fail(?:s|ed|ure)?\b|did not|does not (?:outperform|improve|generalize)|remained superior|outperformed (?:the|our) (?:agent|rl|model)|consumed more energy|margin (?:was|is) small|only (?:about|marginal)|marginal (?:gain|improvement)|challenges|lessons learned|limitations?\b|difficult(?:ies|y)/i;
+
+export function audienceFit(summary) {
+  const sentences = (summary || '').split(/(?<=[.!?])\s+/);
+  const find = (re) => sentences.find((s) => re.test(s)) || null;
+  const ml = ML_RE.test(summary || '');
+  const practice = PRACTICE_RE.test(summary || '');
+  return {
+    audience: ml && !practice ? 'ml' : practice && !ml ? 'practice' : ml && practice ? 'mixed' : null,
+    motive: find(MOTIVE_RE),
+    negative: find(NEGATIVE_RE),
+  };
+}
+
 function scorePaper(p) {
+  p.fit = audienceFit(p.summary);
   const title = (p.title || '').toLowerCase();
   const abs = (p.summary || '').toLowerCase();
   p.matched = [];

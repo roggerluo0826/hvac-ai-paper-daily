@@ -18,6 +18,26 @@ function scoreClass(s) {
   return '';
 }
 
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const AUDIENCE = {
+  ml: ['偏 ML 研究者', '寫給做演算法的人，對顧問多半只有幾頁能用'],
+  practice: ['偏工程實務', '有現場 / 實務字眼，較可能直接用得上'],
+  mixed: ['ML + 實務', '方法和現場都有，挑實務那幾節讀'],
+};
+
+// 讀者對位：這篇寫給誰、作者動機句、負面情報
+function fitHtml(fit) {
+  if (!fit) return '';
+  const [label, hint] = AUDIENCE[fit.audience] || ['讀者不明', '摘要看不出寫給誰，先讀結論再決定'];
+  return `
+    <div class="fit">
+      <div><span class="fit-label">讀者對位</span><span class="tag aud-${fit.audience || 'none'}">${label}</span><small>${hint}</small></div>
+      ${fit.motive ? `<p class="fit-line">📝 作者動機：「${esc(fit.motive)}」</p>` : ''}
+      ${fit.negative ? `<p class="fit-line neg">⚠ 負面情報：「${esc(fit.negative)}」</p>` : ''}
+    </div>`;
+}
+
 function render() {
   const sort = $('#sort').value;
   const range = parseInt($('#range').value, 10);
@@ -63,6 +83,7 @@ function render() {
     }</p>
       <p class="summary clamp">${p.summary || ''}</p>
       <button class="more">展開摘要</button>
+      ${fitHtml(p.fit)}
       <div class="card-bottom">
         ${kwTags}${catTags}
         <span class="date">${fmtDate(p.published)}（${p.daysOld} 天前）</span>

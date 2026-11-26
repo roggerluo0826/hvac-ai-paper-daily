@@ -131,3 +131,14 @@ input[type="search"] { min-width: 200px; }
   .meta { text-align: left; }
   .card-title { font-size: 16px; }
 }
+
+/* 讀者對位 */
+.fit { margin: 10px 0 4px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; font-size: 13px; }
+.fit > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fit small { color: var(--muted); }
+.fit-label { font-weight: 600; }
+.fit-line { margin: 6px 0 0; color: var(--muted); line-height: 1.5; }
+.fit-line.neg { color: var(--hot); }
+.aud-ml { color: var(--hot); border-color: var(--hot); }
+.aud-practice { color: var(--accent-2); border-color: var(--accent-2); }
+.aud-mixed { color: var(--accent); border-color: var(--accent); }
